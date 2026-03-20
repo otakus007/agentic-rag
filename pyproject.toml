@@ -14,6 +14,8 @@ psycopg-pool = "^3.3.0"
 litellm = "^1.82.4"
 python-dotenv = "^1.2.2"
 pydantic = "^2.12.5"
+mem0ai = {extras = ["postgres"], version = "^1.0.6"}
+langchain-openai = "^1.1.11"
 
 [build-system]
 requires = ["poetry-core"]
