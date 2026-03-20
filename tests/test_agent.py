@@ -6,9 +6,15 @@ from langchain_core.messages import AIMessage
 def test_graph_initialization():
     assert app_graph is not None
 
+@patch("src.agent.graph.get_mem0_client")
 @patch("src.agent.graph.llm")
-def test_graph_invocation(mock_llm):
+def test_graph_invocation(mock_llm, mock_get_client):
     mock_llm.invoke.return_value = AIMessage(content="Hello World")
+    
+    mock_client = MagicMock()
+    mock_client.search.return_value = {"results": [{"memory": "User likes TDD."}]}
+    mock_get_client.return_value = mock_client
+    
     result = app_graph.invoke({
         "messages": [{"role": "user", "content": "test"}],
         "user_id": "test_user",
