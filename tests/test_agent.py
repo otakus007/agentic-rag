@@ -10,14 +10,16 @@ import inspect
 def test_graph_initialization():
     assert app_graph is not None
 
+@patch("src.agent.graph.retrieve_context")
 @patch("src.agent.graph.get_mem0_client")
 @patch("src.agent.graph.llm")
-def test_graph_invocation(mock_llm, mock_get_client):
+def test_graph_invocation(mock_llm, mock_get_client, mock_retriever):
     mock_llm.invoke.return_value = AIMessage(content="Hello World")
     
     mock_client = MagicMock()
     mock_client.search.return_value = {"results": [{"memory": "User likes TDD."}]}
     mock_get_client.return_value = mock_client
+    mock_retriever.return_value = []
     
     result = app_graph.invoke({
         "messages": [{"role": "user", "content": "test"}],
@@ -47,7 +49,6 @@ def test_get_compiled_graph_without_checkpointer():
 # --- Phase 2 Nyquist Gap Fixes ---
 
 def test_save_memory_tool_signature():
-    """Verify save_memory tool has the correct parameters: fact, user_id, agent_id."""
     sig = inspect.signature(save_memory.func)
     param_names = list(sig.parameters.keys())
     assert "fact" in param_names
@@ -55,21 +56,21 @@ def test_save_memory_tool_signature():
     assert "agent_id" in param_names
 
 def test_agent_state_has_tracking_fields():
-    """Verify AgentState TypedDict includes user_id and agent_id."""
     annotations = AgentState.__annotations__
-    assert "user_id" in annotations, "AgentState missing user_id field"
-    assert "agent_id" in annotations, "AgentState missing agent_id field"
-    assert "messages" in annotations, "AgentState missing messages field"
+    assert "user_id" in annotations
+    assert "agent_id" in annotations
+    assert "messages" in annotations
 
+@patch("src.agent.graph.retrieve_context")
 @patch("src.agent.graph.get_mem0_client")
 @patch("src.agent.graph.llm")
-def test_mem0_search_called_and_injected_as_system_message(mock_llm, mock_get_client):
-    """Verify mem0.search() is called and results are injected into the LLM messages."""
+def test_mem0_search_called_and_injected_as_system_message(mock_llm, mock_get_client, mock_retriever):
     mock_llm.invoke.return_value = AIMessage(content="Response with context")
     
     mock_client = MagicMock()
     mock_client.search.return_value = {"results": [{"memory": "User prefers Python."}]}
     mock_get_client.return_value = mock_client
+    mock_retriever.return_value = []
     
     app_graph.invoke({
         "messages": [{"role": "user", "content": "What language do I prefer?"}],
@@ -77,11 +78,48 @@ def test_mem0_search_called_and_injected_as_system_message(mock_llm, mock_get_cl
         "agent_id": "test_agent"
     })
     
-    # Verify mem0.search was actually called
     mock_client.search.assert_called_once()
-    
-    # Verify the LLM received a system message containing the memory
     llm_call_args = mock_llm.invoke.call_args[0][0]
     system_msgs = [m for m in llm_call_args if isinstance(m, dict) and m.get("role") == "system"]
-    assert len(system_msgs) > 0, "No SystemMessage was injected from Mem0 search results"
+    assert len(system_msgs) > 0
     assert "User prefers Python." in system_msgs[0]["content"]
+
+# --- Phase 4: Qdrant Retrieval Integration ---
+
+@patch("src.agent.graph.retrieve_context")
+@patch("src.agent.graph.get_mem0_client")
+@patch("src.agent.graph.llm")
+def test_qdrant_retrieval_injected_into_messages(mock_llm, mock_get_client, mock_retriever):
+    """Verify Qdrant retrieval results are injected as a SystemMessage with citation markers."""
+    mock_llm.invoke.return_value = AIMessage(content="Based on [1], the policy states...")
+    
+    mock_client = MagicMock()
+    mock_client.search.return_value = {"results": []}
+    mock_get_client.return_value = mock_client
+    
+    mock_retriever.return_value = [
+        {"content": "The leave policy allows 20 days.", "page_number": 5, "block_type": "paragraph", "score": 0.92}
+    ]
+    
+    result = app_graph.invoke({
+        "messages": [{"role": "user", "content": "What is the leave policy?"}],
+        "user_id": "test_user",
+        "agent_id": "test_agent"
+    })
+    
+    mock_retriever.assert_called_once()
+    
+    # Verify LLM received a system message with document context
+    llm_call_args = mock_llm.invoke.call_args[0][0]
+    doc_msgs = [m for m in llm_call_args if isinstance(m, dict) and m.get("role") == "system" and "Document context" in m.get("content", "")]
+    assert len(doc_msgs) == 1
+    assert "[1]" in doc_msgs[0]["content"]
+    assert "The leave policy allows 20 days." in doc_msgs[0]["content"]
+    
+    # Verify sources are returned in state
+    assert len(result.get("sources", [])) == 1
+
+def test_agent_state_has_sources_field():
+    """Verify AgentState includes the sources field for citation tracking."""
+    annotations = AgentState.__annotations__
+    assert "sources" in annotations

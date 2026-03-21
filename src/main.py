@@ -4,6 +4,8 @@ from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from psycopg_pool import AsyncConnectionPool
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
 
 load_dotenv()
 
@@ -32,7 +34,6 @@ def run_ingestion_pipeline(file_path: str, agent_id: str):
         blocks = parse_pdf(file_path)
         embed_and_upsert(blocks, agent_id=agent_id)
     finally:
-        # Clean up the temp file
         if os.path.exists(file_path):
             os.remove(file_path)
 
@@ -44,12 +45,57 @@ async def ingest(
     file: UploadFile = File(...),
 ):
     """Accept a PDF upload and dispatch ingestion as a background task."""
-    # Save uploaded file to a temp path
     suffix = os.path.splitext(file.filename or "upload.pdf")[1]
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, mode="wb") as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
     
     background_tasks.add_task(run_ingestion_pipeline, tmp_path, agent_id)
     return {"status": "ingestion_started", "filename": file.filename}
+
+
+class ChatRequest(BaseModel):
+    message: str
+    user_id: str
+    agent_id: str
+
+
+class Source(BaseModel):
+    content: str
+    page_number: int
+    block_type: str
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: List[Source]
+
+
+@app.post("/chat", response_model=ChatResponse)
+def chat(request: ChatRequest):
+    """Send a message and get an AI response with citations."""
+    from src.agent.graph import app_graph
+    
+    result = app_graph.invoke({
+        "messages": [{"role": "user", "content": request.message}],
+        "user_id": request.user_id,
+        "agent_id": request.agent_id,
+    })
+    
+    # Extract the last AI message
+    last_msg = result["messages"][-1]
+    answer = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+    
+    # Extract sources from graph state
+    raw_sources = result.get("sources", [])
+    sources = [
+        Source(
+            content=s.get("content", ""),
+            page_number=s.get("page_number", 0),
+            block_type=s.get("block_type", ""),
+        )
+        for s in raw_sources
+    ]
+    
+    return ChatResponse(answer=answer, sources=sources)
