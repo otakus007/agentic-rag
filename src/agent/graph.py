@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.postgres import PostgresSaver
 
 from dotenv import load_dotenv
 import os
@@ -55,4 +56,9 @@ builder.add_edge(START, "chatbot")
 builder.add_conditional_edges("chatbot", route_tools)
 builder.add_edge("tools", "chatbot")
 
+def get_compiled_graph(checkpointer=None):
+    """Compile the graph with an optional PostgresSaver checkpointer for persistence."""
+    return builder.compile(checkpointer=checkpointer)
+
+# Default graph without checkpointer (for tests / offline use)
 app_graph = builder.compile()

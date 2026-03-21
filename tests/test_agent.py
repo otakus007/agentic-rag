@@ -1,7 +1,8 @@
-from src.agent.graph import app_graph
+from src.agent.graph import app_graph, get_compiled_graph
 from src.agent.memory import get_mem0_client
 from unittest.mock import patch, MagicMock
 from langchain_core.messages import AIMessage
+from langgraph.checkpoint.memory import InMemorySaver
 
 def test_graph_initialization():
     assert app_graph is not None
@@ -28,3 +29,14 @@ def test_mem0_initialization(mock_from_config):
     mock_from_config.return_value = MagicMock()
     client = get_mem0_client()
     assert client is not None
+
+def test_get_compiled_graph_with_checkpointer():
+    """Verify that get_compiled_graph accepts a real BaseCheckpointSaver."""
+    checkpointer = InMemorySaver()
+    graph = get_compiled_graph(checkpointer=checkpointer)
+    assert graph is not None
+
+def test_get_compiled_graph_without_checkpointer():
+    """Verify that get_compiled_graph works without a checkpointer (default offline mode)."""
+    graph = get_compiled_graph()
+    assert graph is not None
