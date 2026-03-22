@@ -226,7 +226,11 @@ def delete_knowledge_base(agent_id: str, user: dict = Depends(get_current_user))
 
 # --- Admin: Chatbot Builder ---
 
-AVAILABLE_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
+def _get_all_model_names():
+    """Flatten all provider models into a single list."""
+    from src.llm.adapters import get_all_models
+    all_models = get_all_models()
+    return [m for models in all_models.values() for m in models]
 
 
 class ChatbotCreate(BaseModel):
@@ -249,14 +253,15 @@ class ChatbotResponse(BaseModel):
 
 @app.get("/admin/models")
 def list_models(user: dict = Depends(get_current_user)):
-    """List available LLM models."""
-    return {"models": AVAILABLE_MODELS}
+    """List available LLM models grouped by provider."""
+    from src.llm.adapters import get_all_models
+    return {"models": get_all_models()}
 
 
 @app.post("/admin/chatbots", response_model=ChatbotResponse, status_code=201)
 async def create_chatbot(body: ChatbotCreate, request: Request, user: dict = Depends(get_current_user)):
     """Create a new chatbot configuration."""
-    if body.model not in AVAILABLE_MODELS:
+    if body.model not in _get_all_model_names():
         raise HTTPException(status_code=400, detail=f"Model '{body.model}' not available")
 
     chatbot_id = str(uuid.uuid4())
@@ -310,7 +315,7 @@ async def get_chatbot(chatbot_id: str, request: Request, user: dict = Depends(ge
 @app.put("/admin/chatbots/{chatbot_id}", response_model=ChatbotResponse)
 async def update_chatbot(chatbot_id: str, body: ChatbotCreate, request: Request, user: dict = Depends(get_current_user)):
     """Update a chatbot configuration."""
-    if body.model not in AVAILABLE_MODELS:
+    if body.model not in _get_all_model_names():
         raise HTTPException(status_code=400, detail=f"Model '{body.model}' not available")
 
     pool = request.state.pool
