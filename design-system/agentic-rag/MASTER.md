@@ -7,8 +7,8 @@
 ---
 
 **Project:** Agentic RAG
-**Generated:** 2026-03-22 10:02:43
-**Category:** AI/Chatbot Platform
+**Generated:** 2026-03-22 11:33:28
+**Category:** Analytics Dashboard
 
 ---
 
@@ -18,19 +18,25 @@
 
 | Role | Hex | CSS Variable |
 |------|-----|--------------|
-| Primary | `#7C3AED` | `--color-primary` |
-| Secondary | `#A78BFA` | `--color-secondary` |
-| CTA/Accent | `#06B6D4` | `--color-cta` |
-| Background | `#FAF5FF` | `--color-background` |
-| Text | `#1E1B4B` | `--color-text` |
+| Primary | `#1E40AF` | `--color-primary` |
+| Secondary | `#3B82F6` | `--color-secondary` |
+| CTA/Accent | `#F59E0B` | `--color-cta` |
+| Background | `#F8FAFC` | `--color-background` |
+| Text | `#1E3A8A` | `--color-text` |
 
-**Color Notes:** AI purple + cyan interactions
+**Color Notes:** Blue data + amber highlights
 
 ### Typography
 
-- **Heading Font:** Inter
-- **Body Font:** Inter
-- **Mood:** Modern + Clear typography
+- **Heading Font:** Fira Code
+- **Body Font:** Fira Sans
+- **Mood:** dashboard, data, analytics, code, technical, precise
+- **Google Fonts:** [Fira Code + Fira Sans](https://fonts.google.com/share?selection.family=Fira+Code:wght@400;500;600;700|Fira+Sans:wght@300;400;500;600;700)
+
+**CSS Import:**
+```css
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+```
 
 ### Spacing Variables
 
@@ -62,7 +68,7 @@
 ```css
 /* Primary Button */
 .btn-primary {
-  background: #06B6D4;
+  background: #F59E0B;
   color: white;
   padding: 12px 24px;
   border-radius: 8px;
@@ -79,8 +85,8 @@
 /* Secondary Button */
 .btn-secondary {
   background: transparent;
-  color: #7C3AED;
-  border: 2px solid #7C3AED;
+  color: #1E40AF;
+  border: 2px solid #1E40AF;
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
@@ -93,7 +99,7 @@
 
 ```css
 .card {
-  background: #FAF5FF;
+  background: #F8FAFC;
   border-radius: 12px;
   padding: 24px;
   box-shadow: var(--shadow-md);
@@ -119,9 +125,9 @@
 }
 
 .input:focus {
-  border-color: #7C3AED;
+  border-color: #1E40AF;
   outline: none;
-  box-shadow: 0 0 0 3px #7C3AED20;
+  box-shadow: 0 0 0 3px #1E40AF20;
 }
 ```
 
@@ -147,17 +153,17 @@
 
 ## Style Guidelines
 
-**Style:** AI-Native UI
+**Style:** Data-Dense Dashboard
 
-**Keywords:** Chatbot, conversational, voice, assistant, agentic, ambient, minimal chrome, streaming text, AI interactions
+**Keywords:** Multiple charts/widgets, data tables, KPI cards, minimal padding, grid layout, space-efficient, maximum data visibility
 
-**Best For:** AI products, chatbots, voice assistants, copilots, AI-powered tools, conversational interfaces
+**Best For:** Business intelligence dashboards, financial analytics, enterprise reporting, operational dashboards, data warehousing
 
-**Key Effects:** Typing indicators (3-dot pulse), streaming text animations, pulse animations, context cards, smooth reveals
+**Key Effects:** Hover tooltips, chart zoom on click, row highlighting on hover, smooth filter animations, data loading spinners
 
 ### Page Pattern
 
-**Pattern Name:** Interactive Demo + Minimal
+**Pattern Name:** Data-Dense + Drill-Down
 
 - **CTA Placement:** Above fold
 - **Section Order:** Hero > Features > CTA
@@ -166,8 +172,8 @@
 
 ## Anti-Patterns (Do NOT Use)
 
-- ❌ Heavy chrome
-- ❌ Slow response feedback
+- ❌ Ornate design
+- ❌ No filtering
 
 ### Additional Forbidden Patterns
 
