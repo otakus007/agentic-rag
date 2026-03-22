@@ -1,6 +1,7 @@
 import os
+import uuid
 import tempfile
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, Request
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from psycopg_pool import AsyncConnectionPool
@@ -15,6 +16,19 @@ async def lifespan(app: FastAPI):
     db_url = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/agentic_rag")
     pool = AsyncConnectionPool(conninfo=db_url, open=False)
     await pool.open()
+    # Create chatbots table if not exists
+    async with pool.connection() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS chatbots (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                agent_id TEXT UNIQUE NOT NULL,
+                kb_id TEXT NOT NULL,
+                model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
     app.state.pool = pool
     yield {"pool": pool}
     await pool.close()
@@ -168,3 +182,121 @@ def delete_knowledge_base(agent_id: str, user: dict = Depends(get_current_user))
 
     qdrant.delete_collection(collection_name)
     return {"status": "deleted", "agent_id": agent_id}
+
+
+# --- Admin: Chatbot Builder ---
+
+AVAILABLE_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
+
+
+class ChatbotCreate(BaseModel):
+    name: str
+    description: str = ""
+    agent_id: str
+    kb_id: str
+    model: str = "gpt-4o-mini"
+
+
+class ChatbotResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    agent_id: str
+    kb_id: str
+    model: str
+    created_at: Optional[str] = None
+
+
+@app.get("/admin/models")
+def list_models(user: dict = Depends(get_current_user)):
+    """List available LLM models."""
+    return {"models": AVAILABLE_MODELS}
+
+
+@app.post("/admin/chatbots", response_model=ChatbotResponse, status_code=201)
+async def create_chatbot(body: ChatbotCreate, request: Request, user: dict = Depends(get_current_user)):
+    """Create a new chatbot configuration."""
+    if body.model not in AVAILABLE_MODELS:
+        raise HTTPException(status_code=400, detail=f"Model '{body.model}' not available")
+
+    chatbot_id = str(uuid.uuid4())
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        await conn.execute(
+            "INSERT INTO chatbots (id, name, description, agent_id, kb_id, model) VALUES (%s, %s, %s, %s, %s, %s)",
+            (chatbot_id, body.name, body.description, body.agent_id, body.kb_id, body.model),
+        )
+
+    return ChatbotResponse(
+        id=chatbot_id, name=body.name, description=body.description,
+        agent_id=body.agent_id, kb_id=body.kb_id, model=body.model,
+    )
+
+
+@app.get("/admin/chatbots", response_model=List[ChatbotResponse])
+async def list_chatbots(request: Request, user: dict = Depends(get_current_user)):
+    """List all chatbot configurations."""
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        cur = await conn.execute("SELECT id, name, description, agent_id, kb_id, model, created_at FROM chatbots ORDER BY created_at DESC")
+        rows = await cur.fetchall()
+
+    return [
+        ChatbotResponse(
+            id=r[0], name=r[1], description=r[2], agent_id=r[3],
+            kb_id=r[4], model=r[5], created_at=str(r[6]) if r[6] else None,
+        )
+        for r in rows
+    ]
+
+
+@app.get("/admin/chatbots/{chatbot_id}", response_model=ChatbotResponse)
+async def get_chatbot(chatbot_id: str, request: Request, user: dict = Depends(get_current_user)):
+    """Get a chatbot by ID."""
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        cur = await conn.execute("SELECT id, name, description, agent_id, kb_id, model, created_at FROM chatbots WHERE id = %s", (chatbot_id,))
+        row = await cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Chatbot not found")
+
+    return ChatbotResponse(
+        id=row[0], name=row[1], description=row[2], agent_id=row[3],
+        kb_id=row[4], model=row[5], created_at=str(row[6]) if row[6] else None,
+    )
+
+
+@app.put("/admin/chatbots/{chatbot_id}", response_model=ChatbotResponse)
+async def update_chatbot(chatbot_id: str, body: ChatbotCreate, request: Request, user: dict = Depends(get_current_user)):
+    """Update a chatbot configuration."""
+    if body.model not in AVAILABLE_MODELS:
+        raise HTTPException(status_code=400, detail=f"Model '{body.model}' not available")
+
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        cur = await conn.execute("SELECT id FROM chatbots WHERE id = %s", (chatbot_id,))
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="Chatbot not found")
+
+        await conn.execute(
+            "UPDATE chatbots SET name=%s, description=%s, agent_id=%s, kb_id=%s, model=%s WHERE id=%s",
+            (body.name, body.description, body.agent_id, body.kb_id, body.model, chatbot_id),
+        )
+
+    return ChatbotResponse(
+        id=chatbot_id, name=body.name, description=body.description,
+        agent_id=body.agent_id, kb_id=body.kb_id, model=body.model,
+    )
+
+
+@app.delete("/admin/chatbots/{chatbot_id}")
+async def delete_chatbot(chatbot_id: str, request: Request, user: dict = Depends(get_current_user)):
+    """Delete a chatbot."""
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        cur = await conn.execute("DELETE FROM chatbots WHERE id = %s RETURNING id", (chatbot_id,))
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="Chatbot not found")
+
+    return {"status": "deleted", "id": chatbot_id}

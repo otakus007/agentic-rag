@@ -28,7 +28,7 @@ const routes = [
   {
     path: '/admin/chatbots',
     name: 'AdminChatbots',
-    component: () => import('../views/admin/DashboardView.vue'),
+    component: () => import('../views/admin/ChatbotListView.vue'),
     meta: { requiresAuth: true },
   },
   {

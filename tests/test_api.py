@@ -15,6 +15,12 @@ def test_health_check():
 @patch("src.main.AsyncConnectionPool")
 def test_lifespan_initializes_pool(mock_pool_cls):
     mock_pool = AsyncMock()
+    # pool.connection() must be a non-async callable returning an async CM
+    mock_conn = AsyncMock()
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_pool.connection = MagicMock(return_value=mock_cm)
     mock_pool_cls.return_value = mock_pool
     
     with TestClient(app) as tc:
