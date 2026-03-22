@@ -6,9 +6,21 @@ An admin-managed Agentic RAG chatbot platform aimed at providing high-precision 
 
 ## Current State
 
-**Shipped: v1.0** (2026-03-21) — Full backend platform with RAG pipeline, OAuth, and tool extensions.
+**Shipped: v1.1** (2026-03-22) — Full-stack platform with Vue 3 frontend, admin dashboard, and chatbot builder.
 
-**Active: v1.1** — Frontend UI (Vue 3 + Vite + Tailwind + UUPM design system)
+### Key Accomplishments (v1.1)
+- Vue 3 + Vite + Tailwind v4 frontend with UUPM Dark OLED design system
+- User chat interface with citation markers, sources panel, and conversation sidebar
+- Admin KB management dashboard with drag-and-drop PDF upload
+- Admin chatbot builder with Postgres CRUD and inline test chat
+- 80 total tests (46 backend + 34 frontend), 44KB gzipped production bundle
+
+### Next Milestone Goals (v1.2)
+- Dark/light mode toggle
+- Multi-LLM routing (OpenAI, Gemini, Anthropic)
+- User management / role-based access control
+- Real-time WebSocket streaming
+- Dynamic LLM model discovery
 
 ## Core Value
 
@@ -17,27 +29,27 @@ A highly extensible, from-scratch Agentic RAG pipeline that delivers precise, ci
 ## Requirements
 
 ### Validated (v1.0)
-
 - [x] OAuth integration (Google, Microsoft) via JWT Bearer tokens
 - [x] Document ingestion pipeline (MinerU PDF → Qdrant)
 - [x] Cross-session user memory management using Mem0
 - [x] Extensible agent framework with per-agent tool registry
 - [x] Full RAG flow with inline citations
 
-### Active (v1.1)
-
-- [ ] End-user chat interface with streaming, citations, dark mode
-- [ ] Admin dashboard to manage knowledge bases (upload, view, delete)
-- [ ] Admin chatbot builder (create, assign KB, select LLM, test)
+### Validated (v1.1)
+- [x] End-user chat interface with citations and dark mode
+- [x] Admin dashboard to manage knowledge bases (upload, view, delete)
+- [x] Admin chatbot builder (create, assign KB, select LLM, test)
+- [x] Vue 3 + Vite + Tailwind frontend scaffold with UUPM design system
+- [x] API client with JWT token management
 
 ### Future (v1.2+)
-
 - [ ] Multi-LLM routing (OpenAI, Gemini, Anthropic) via unified interface
 - [ ] User management / role-based access control
 - [ ] Real-time WebSocket streaming
+- [ ] Dark/light mode toggle
+- [ ] Dynamic LLM model discovery
 
 ### Out of Scope
-
 - SaaS Billing / Subscription management — Admin-managed internally
 - End-user knowledge base creation — Only admins assign KBs to chatbots
 
@@ -59,8 +71,19 @@ A highly extensible, from-scratch Agentic RAG pipeline that delivers precise, ci
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Build from scratch | Learn step-by-step, fine-grained control | ✅ v1.0 shipped |
-| Vue 3 frontend | Balance of DX, ecosystem, and bundle size | v1.1 active |
-| UUPM design system | AI-generated design intelligence for professional UI | v1.1 active |
+| Vue 3 frontend | Balance of DX, ecosystem, and bundle size | ✅ v1.1 shipped |
+| UUPM design system | AI-generated design intelligence for professional UI | ✅ v1.1 shipped |
+| Postgres for chatbot config | Reuse existing pool, simple SQL | ✅ v1.1 shipped |
+
+<details>
+<summary>Previous milestones</summary>
+
+### v1.0 — Backend Platform (2026-03-21)
+6 phases, 41 tests, 1,190 LOC. Core scaffold, Mem0, document ingestion, RAG flow, OAuth, tool extensions.
+
+### v1.1 — Frontend UI (2026-03-22)
+4 phases (7-10), 80 tests, 2,570 LOC. Vue 3 scaffold, chat interface, admin KB dashboard, chatbot builder.
+</details>
 
 ---
-*Last updated: 2026-03-22 — v1.1 milestone started*
+*Last updated: 2026-03-22 — v1.1 milestone completed*
