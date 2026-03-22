@@ -8,6 +8,8 @@ An admin-managed Agentic RAG chatbot platform aimed at providing high-precision 
 
 **Shipped: v1.1** (2026-03-22) — Full-stack platform with Vue 3 frontend, admin dashboard, and chatbot builder.
 
+**Active: v1.2** — Production Polish (streaming, multi-LLM, RBAC, doc CRUD)
+
 ### Key Accomplishments (v1.1)
 - Vue 3 + Vite + Tailwind v4 frontend with UUPM Dark OLED design system
 - User chat interface with citation markers, sources panel, and conversation sidebar
@@ -16,11 +18,11 @@ An admin-managed Agentic RAG chatbot platform aimed at providing high-precision 
 - 80 total tests (46 backend + 34 frontend), 44KB gzipped production bundle
 
 ### Next Milestone Goals (v1.2)
-- Dark/light mode toggle
-- Multi-LLM routing (OpenAI, Gemini, Anthropic)
-- User management / role-based access control
-- Real-time WebSocket streaming
-- Dynamic LLM model discovery
+- SSE streaming chat with progressive text rendering
+- Multi-provider LLM routing (OpenAI, Gemini, Anthropic)
+- User management with role-based access control
+- Ingestion progress tracking + document-level CRUD
+- Dark/light mode toggle, API versioning
 
 ## Core Value
 
