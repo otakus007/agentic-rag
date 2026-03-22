@@ -170,3 +170,5 @@ data/
 .anthropic/
 .gemini/
 .claude/
+frontend/node_modules/
+frontend/dist/
