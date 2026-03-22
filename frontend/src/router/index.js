@@ -16,7 +16,18 @@ const routes = [
   },
   {
     path: '/admin',
-    name: 'AdminDashboard',
+    redirect: '/admin/kb',
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/admin/kb',
+    name: 'AdminKB',
+    component: () => import('../views/admin/KBListView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/admin/chatbots',
+    name: 'AdminChatbots',
     component: () => import('../views/admin/DashboardView.vue'),
     meta: { requiresAuth: true },
   },

@@ -98,3 +98,73 @@ def chat(request: ChatRequest, user: dict = Depends(get_current_user)):
     ]
     
     return ChatResponse(answer=answer, sources=sources)
+
+
+# --- Admin: Knowledge Base Management ---
+
+class KBInfo(BaseModel):
+    name: str
+    agent_id: str
+    document_count: int
+
+
+class KBDetail(KBInfo):
+    vector_size: int
+
+
+@app.get("/admin/kb", response_model=List[KBInfo])
+def list_knowledge_bases(user: dict = Depends(get_current_user)):
+    """List all knowledge base collections. Requires auth."""
+    from src.ingestion.embedder import get_qdrant_client
+
+    qdrant = get_qdrant_client()
+    collections = qdrant.get_collections().collections
+    result = []
+    for c in collections:
+        if c.name.startswith("kb_"):
+            agent_id = c.name[3:]  # strip "kb_" prefix
+            count = qdrant.count(collection_name=c.name).count
+            result.append(KBInfo(name=c.name, agent_id=agent_id, document_count=count))
+    return result
+
+
+@app.get("/admin/kb/{agent_id}", response_model=KBDetail)
+def get_knowledge_base(agent_id: str, user: dict = Depends(get_current_user)):
+    """Get details of a specific knowledge base. Requires auth."""
+    from src.ingestion.embedder import get_qdrant_client
+
+    qdrant = get_qdrant_client()
+    collection_name = f"kb_{agent_id}"
+
+    collections = [c.name for c in qdrant.get_collections().collections]
+    if collection_name not in collections:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Knowledge base '{agent_id}' not found")
+
+    info = qdrant.get_collection(collection_name)
+    count = qdrant.count(collection_name=collection_name).count
+    vector_size = info.config.params.vectors.size if hasattr(info.config.params.vectors, 'size') else 0
+
+    return KBDetail(
+        name=collection_name,
+        agent_id=agent_id,
+        document_count=count,
+        vector_size=vector_size,
+    )
+
+
+@app.delete("/admin/kb/{agent_id}")
+def delete_knowledge_base(agent_id: str, user: dict = Depends(get_current_user)):
+    """Delete a knowledge base collection. Requires auth."""
+    from src.ingestion.embedder import get_qdrant_client
+
+    qdrant = get_qdrant_client()
+    collection_name = f"kb_{agent_id}"
+
+    collections = [c.name for c in qdrant.get_collections().collections]
+    if collection_name not in collections:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Knowledge base '{agent_id}' not found")
+
+    qdrant.delete_collection(collection_name)
+    return {"status": "deleted", "agent_id": agent_id}

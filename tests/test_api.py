@@ -145,3 +145,93 @@ def test_chat_user_id_from_token(mock_graph, mock_decode):
     # Verify the graph was invoked with user_id from the token
     invoke_args = mock_graph.invoke.call_args[0][0]
     assert invoke_args["user_id"] == "jwt-user-42"
+
+
+# --- Phase 9: Admin KB endpoint tests ---
+
+@patch("src.auth.providers.decode_token")
+@patch("src.ingestion.embedder.get_qdrant_client")
+def test_list_kb_returns_collections(mock_qdrant, mock_decode):
+    """Verify GET /admin/kb lists Qdrant collections with doc count."""
+    mock_decode.return_value = {"sub": "uid-1", "email": "a@b.com", "iss": "accounts.google.com"}
+
+    from types import SimpleNamespace
+    mock_client = MagicMock()
+    mock_client.get_collections.return_value = SimpleNamespace(
+        collections=[SimpleNamespace(name="kb_agent1"), SimpleNamespace(name="kb_agent2")]
+    )
+    mock_client.count.side_effect = [SimpleNamespace(count=10), SimpleNamespace(count=5)]
+    mock_qdrant.return_value = mock_client
+
+    response = client.get("/admin/kb", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["agent_id"] == "agent1"
+    assert data[0]["document_count"] == 10
+
+
+@patch("src.auth.providers.decode_token")
+@patch("src.ingestion.embedder.get_qdrant_client")
+def test_get_kb_details(mock_qdrant, mock_decode):
+    """Verify GET /admin/kb/{agent_id} returns collection details."""
+    mock_decode.return_value = {"sub": "uid-1", "email": "a@b.com", "iss": "accounts.google.com"}
+
+    from types import SimpleNamespace
+    mock_client = MagicMock()
+    mock_client.get_collections.return_value = SimpleNamespace(
+        collections=[SimpleNamespace(name="kb_test")]
+    )
+    mock_client.count.return_value = SimpleNamespace(count=15)
+    mock_client.get_collection.return_value = SimpleNamespace(
+        config=SimpleNamespace(params=SimpleNamespace(vectors=SimpleNamespace(size=1536)))
+    )
+    mock_qdrant.return_value = mock_client
+
+    response = client.get("/admin/kb/test", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["agent_id"] == "test"
+    assert data["document_count"] == 15
+    assert data["vector_size"] == 1536
+
+
+@patch("src.auth.providers.decode_token")
+@patch("src.ingestion.embedder.get_qdrant_client")
+def test_delete_kb(mock_qdrant, mock_decode):
+    """Verify DELETE /admin/kb/{agent_id} deletes the collection."""
+    mock_decode.return_value = {"sub": "uid-1", "email": "a@b.com", "iss": "accounts.google.com"}
+
+    from types import SimpleNamespace
+    mock_client = MagicMock()
+    mock_client.get_collections.return_value = SimpleNamespace(
+        collections=[SimpleNamespace(name="kb_del")]
+    )
+    mock_qdrant.return_value = mock_client
+
+    response = client.delete("/admin/kb/del", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "deleted"
+    mock_client.delete_collection.assert_called_once_with("kb_del")
+
+
+@patch("src.auth.providers.decode_token")
+@patch("src.ingestion.embedder.get_qdrant_client")
+def test_get_kb_not_found(mock_qdrant, mock_decode):
+    """Verify GET /admin/kb/{agent_id} returns 404 for missing collection."""
+    mock_decode.return_value = {"sub": "uid-1", "email": "a@b.com", "iss": "accounts.google.com"}
+
+    from types import SimpleNamespace
+    mock_client = MagicMock()
+    mock_client.get_collections.return_value = SimpleNamespace(collections=[])
+    mock_qdrant.return_value = mock_client
+
+    response = client.get("/admin/kb/missing", headers={"Authorization": "Bearer fake-token"})
+    assert response.status_code == 404
+
+
+def test_admin_kb_requires_auth():
+    """Verify admin endpoints require auth."""
+    assert client.get("/admin/kb").status_code == 401
+    assert client.get("/admin/kb/test").status_code == 401
+    assert client.delete("/admin/kb/test").status_code == 401
