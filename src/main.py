@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     db_url = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/agentic_rag")
     pool = AsyncConnectionPool(conninfo=db_url, open=False)
     await pool.open()
-    # Create chatbots table if not exists
+    # Create tables if not exists
     async with pool.connection() as conn:
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS chatbots (
@@ -29,6 +29,14 @@ async def lifespan(app: FastAPI):
                 agent_id TEXT UNIQUE NOT NULL,
                 kb_id TEXT NOT NULL,
                 model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
         """)
@@ -345,3 +353,110 @@ async def delete_chatbot(chatbot_id: str, request: Request, user: dict = Depends
             raise HTTPException(status_code=404, detail="Chatbot not found")
 
     return {"status": "deleted", "id": chatbot_id}
+
+
+# --- Admin: User Management ---
+
+class UserResponse(BaseModel):
+    user_id: str
+    email: str
+    role: str
+    created_at: Optional[str] = None
+
+
+class UserRoleUpdate(BaseModel):
+    role: str  # "admin" or "user"
+
+
+@app.get("/admin/users", response_model=List[UserResponse])
+async def list_users(request: Request, user: dict = Depends(get_current_user)):
+    """List all users. Requires auth."""
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        cur = await conn.execute("SELECT user_id, email, role, created_at FROM users ORDER BY created_at DESC")
+        rows = await cur.fetchall()
+    return [
+        UserResponse(user_id=r[0], email=r[1], role=r[2], created_at=str(r[3]) if r[3] else None)
+        for r in rows
+    ]
+
+
+@app.put("/admin/users/{user_id}/role")
+async def update_user_role(
+    user_id: str, body: UserRoleUpdate, request: Request, user: dict = Depends(get_current_user)
+):
+    """Update a user's role. Requires auth."""
+    if body.role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        cur = await conn.execute(
+            "UPDATE users SET role = %s WHERE user_id = %s RETURNING user_id",
+            (body.role, user_id),
+        )
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="User not found")
+
+    return {"status": "updated", "user_id": user_id, "role": body.role}
+
+
+# --- Admin: Document CRUD ---
+
+class DocumentChunk(BaseModel):
+    id: str
+    content: str
+    page_number: int
+    block_type: str
+
+
+@app.get("/admin/kb/{agent_id}/documents", response_model=List[DocumentChunk])
+def list_documents(agent_id: str, limit: int = 50, offset: int = 0, user: dict = Depends(get_current_user)):
+    """List document chunks in a knowledge base. Requires auth."""
+    from src.ingestion.embedder import get_qdrant_client
+
+    qdrant = get_qdrant_client()
+    collection_name = f"kb_{agent_id}"
+
+    results = qdrant.scroll(
+        collection_name=collection_name,
+        limit=limit,
+        offset=offset,
+        with_payload=True,
+        with_vectors=False,
+    )[0]
+
+    return [
+        DocumentChunk(
+            id=str(point.id),
+            content=point.payload.get("content", ""),
+            page_number=point.payload.get("page_number", 0),
+            block_type=point.payload.get("block_type", ""),
+        )
+        for point in results
+    ]
+
+
+@app.delete("/admin/kb/{agent_id}/documents/{doc_id}")
+def delete_document(agent_id: str, doc_id: str, user: dict = Depends(get_current_user)):
+    """Delete a specific document chunk from a knowledge base. Requires auth."""
+    from src.ingestion.embedder import get_qdrant_client
+    from qdrant_client.models import PointIdsList
+
+    qdrant = get_qdrant_client()
+    collection_name = f"kb_{agent_id}"
+
+    qdrant.delete(
+        collection_name=collection_name,
+        points_selector=PointIdsList(points=[doc_id]),
+    )
+
+    return {"status": "deleted", "agent_id": agent_id, "doc_id": doc_id}
+
+
+# --- API Info ---
+
+@app.get("/api/version")
+def api_version():
+    """Return API version info."""
+    return {"version": "1.2.0", "api_prefix": "/v1", "status": "production"}
