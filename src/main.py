@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
                 agent_id TEXT UNIQUE NOT NULL,
                 kb_id TEXT NOT NULL,
                 model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+                system_prompt TEXT DEFAULT '',
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
         """)
@@ -37,6 +38,22 @@ async def lifespan(app: FastAPI):
                 user_id TEXT PRIMARY KEY,
                 email TEXT UNIQUE NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                provider TEXT PRIMARY KEY,
+                encrypted_key TEXT NOT NULL,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS query_logs (
+                id SERIAL PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                question TEXT NOT NULL,
+                chunks_retrieved INTEGER DEFAULT 0,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
         """)
@@ -247,6 +264,7 @@ class ChatbotCreate(BaseModel):
     agent_id: str
     kb_id: str
     model: str = "gpt-4o-mini"
+    system_prompt: str = "You are a helpful AI assistant."
 
 
 class ChatbotResponse(BaseModel):
@@ -256,6 +274,7 @@ class ChatbotResponse(BaseModel):
     agent_id: str
     kb_id: str
     model: str
+    system_prompt: str = ""
     created_at: Optional[str] = None
 
 
@@ -454,9 +473,118 @@ def delete_document(agent_id: str, doc_id: str, user: dict = Depends(get_current
     return {"status": "deleted", "agent_id": agent_id, "doc_id": doc_id}
 
 
+# --- Admin: API Key Management (Phase 16) ---
+
+class APIKeySet(BaseModel):
+    provider: str
+    api_key: str
+
+
+class APIKeyStatus(BaseModel):
+    provider: str
+    is_set: bool
+    masked_key: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+@app.get("/admin/api-keys", response_model=List[APIKeyStatus])
+async def list_api_keys(request: Request, user: dict = Depends(get_current_user)):
+    """List API key status for all providers. Requires auth."""
+    from src.llm.adapters import PROVIDERS
+    from src.auth.crypto import decrypt_key, mask_key
+
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        cur = await conn.execute("SELECT provider, encrypted_key, updated_at FROM api_keys")
+        rows = await cur.fetchall()
+
+    stored = {r[0]: r for r in rows}
+    result = []
+    for p in PROVIDERS:
+        if p in stored:
+            try:
+                decrypted = decrypt_key(stored[p][1])
+                result.append(APIKeyStatus(
+                    provider=p, is_set=True,
+                    masked_key=mask_key(decrypted),
+                    updated_at=str(stored[p][2]) if stored[p][2] else None,
+                ))
+            except Exception:
+                result.append(APIKeyStatus(provider=p, is_set=True, masked_key="(decrypt error)"))
+        else:
+            result.append(APIKeyStatus(provider=p, is_set=False))
+    return result
+
+
+@app.put("/admin/api-keys")
+async def set_api_key(body: APIKeySet, request: Request, user: dict = Depends(get_current_user)):
+    """Set or update an API key for a provider. Requires auth."""
+    from src.llm.adapters import PROVIDERS
+    from src.auth.crypto import encrypt_key
+
+    if body.provider not in PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {body.provider}")
+
+    encrypted = encrypt_key(body.api_key)
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        await conn.execute("""
+            INSERT INTO api_keys (provider, encrypted_key, updated_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (provider) DO UPDATE SET encrypted_key = %s, updated_at = NOW()
+        """, (body.provider, encrypted, encrypted))
+
+    return {"status": "saved", "provider": body.provider}
+
+
+@app.delete("/admin/api-keys/{provider}")
+async def delete_api_key(provider: str, request: Request, user: dict = Depends(get_current_user)):
+    """Delete an API key for a provider. Requires auth."""
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        cur = await conn.execute("DELETE FROM api_keys WHERE provider = %s RETURNING provider", (provider,))
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="API key not found")
+    return {"status": "deleted", "provider": provider}
+
+
+# --- Admin: KB Analytics (Phase 17) ---
+
+class KBAnalytics(BaseModel):
+    agent_id: str
+    total_queries: int
+    recent_queries: List[dict]
+
+
+@app.get("/admin/kb/{agent_id}/analytics", response_model=KBAnalytics)
+async def get_kb_analytics(agent_id: str, request: Request, user: dict = Depends(get_current_user)):
+    """Get query analytics for a knowledge base. Requires auth."""
+    pool = request.state.pool
+    async with pool.connection() as conn:
+        count_cur = await conn.execute(
+            "SELECT COUNT(*) FROM query_logs WHERE agent_id = %s", (agent_id,)
+        )
+        total = (await count_cur.fetchone())[0]
+
+        recent_cur = await conn.execute(
+            "SELECT question, chunks_retrieved, created_at FROM query_logs WHERE agent_id = %s ORDER BY created_at DESC LIMIT 20",
+            (agent_id,),
+        )
+        rows = await recent_cur.fetchall()
+
+    return KBAnalytics(
+        agent_id=agent_id,
+        total_queries=total,
+        recent_queries=[
+            {"question": r[0], "chunks_retrieved": r[1], "created_at": str(r[2]) if r[2] else None}
+            for r in rows
+        ],
+    )
+
+
 # --- API Info ---
 
 @app.get("/api/version")
 def api_version():
     """Return API version info."""
-    return {"version": "1.2.0", "api_prefix": "/v1", "status": "production"}
+    return {"version": "1.3.0", "api_prefix": "/v1", "status": "production"}
