@@ -6,23 +6,22 @@ An admin-managed Agentic RAG chatbot platform aimed at providing high-precision 
 
 ## Current State
 
-**Shipped: v1.1** (2026-03-22) — Full-stack platform with Vue 3 frontend, admin dashboard, and chatbot builder.
+**Shipped: v1.2** (2026-03-22) — Production-polished platform with SSE streaming, multi-LLM, and RBAC.
 
-**Active: v1.2** — Production Polish (streaming, multi-LLM, RBAC, doc CRUD)
+### Key Accomplishments (v1.2)
+- SSE streaming chat with token-by-token progressive rendering
+- Multi-provider LLM adapters (OpenAI, Gemini, Anthropic) with dynamic model discovery
+- RBAC with users table, role management, and admin guard middleware
+- Document-level CRUD for KB chunks (list + delete)
+- Dark/light theme toggle, API versioning endpoint
+- 89 total tests (53 backend + 36 frontend), 2,980 LOC
 
-### Key Accomplishments (v1.1)
-- Vue 3 + Vite + Tailwind v4 frontend with UUPM Dark OLED design system
-- User chat interface with citation markers, sources panel, and conversation sidebar
-- Admin KB management dashboard with drag-and-drop PDF upload
-- Admin chatbot builder with Postgres CRUD and inline test chat
-- 80 total tests (46 backend + 34 frontend), 44KB gzipped production bundle
-
-### Next Milestone Goals (v1.2)
-- SSE streaming chat with progressive text rendering
-- Multi-provider LLM routing (OpenAI, Gemini, Anthropic)
-- User management with role-based access control
-- Ingestion progress tracking + document-level CRUD
-- Dark/light mode toggle, API versioning
+### Next Milestone Goals (v1.3)
+- Ingestion SSE progress tracking
+- Provider API key management UI
+- Microsoft OAuth provider
+- KB usage analytics
+- Custom system prompts per chatbot
 
 ## Core Value
 
