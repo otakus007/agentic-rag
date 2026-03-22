@@ -1,87 +1,83 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useChat } from '../useChat.js'
-import { nextTick } from 'vue'
 
-// Mock the API client
-vi.mock('../../api/client.js', () => ({
-  default: {
-    post: vi.fn(),
-  },
+// Mock auth module
+vi.mock('../../api/auth.js', () => ({
+  getToken: vi.fn(() => 'test-token'),
 }))
 
-import apiClient from '../../api/client.js'
+function createMockResponse(events) {
+  const encoder = new TextEncoder()
+  const chunks = events.map((e) => `data: ${JSON.stringify(e)}\n\n`)
+  let index = 0
 
-describe('useChat', () => {
+  const stream = new ReadableStream({
+    pull(controller) {
+      if (index < chunks.length) {
+        controller.enqueue(encoder.encode(chunks[index]))
+        index++
+      } else {
+        controller.close()
+      }
+    },
+  })
+
+  return { ok: true, body: stream }
+}
+
+describe('useChat (SSE streaming)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    global.fetch = vi.fn()
   })
 
-  it('starts with empty state', () => {
-    const { messages, isLoading, error } = useChat()
-    expect(messages.value).toEqual([])
-    expect(isLoading.value).toBe(false)
-    expect(error.value).toBeNull()
-  })
-
-  it('sends message and appends response', async () => {
-    apiClient.post.mockResolvedValueOnce({
-      data: {
-        answer: 'Hello! Based on [1], yes.',
-        sources: [{ content: 'Source text', page_number: 1, block_type: 'paragraph' }],
-      },
-    })
-
-    const { messages, sendMessage } = useChat()
-    await sendMessage('hi', 'agent-1')
-
-    expect(messages.value).toHaveLength(2)
-    expect(messages.value[0]).toEqual({ role: 'user', content: 'hi' })
-    expect(messages.value[1].role).toBe('assistant')
-    expect(messages.value[1].content).toBe('Hello! Based on [1], yes.')
-    expect(messages.value[1].sources).toHaveLength(1)
-  })
-
-  it('sets isLoading during API call', async () => {
-    let resolvePromise
-    apiClient.post.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolvePromise = resolve
-      })
+  it('streams tokens into assistant message', async () => {
+    global.fetch.mockResolvedValueOnce(
+      createMockResponse([
+        { type: 'token', content: 'Hello' },
+        { type: 'token', content: ' world' },
+        { type: 'done' },
+      ]),
     )
 
-    const { isLoading, sendMessage } = useChat()
-    const promise = sendMessage('test', 'agent-1')
-    await nextTick()
+    const { messages, sendMessage } = useChat()
+    await sendMessage('hi', 'agent1')
 
-    expect(isLoading.value).toBe(true)
-
-    resolvePromise({ data: { answer: 'ok', sources: [] } })
-    await promise
-
-    expect(isLoading.value).toBe(false)
-  })
-
-  it('captures errors without crashing', async () => {
-    apiClient.post.mockRejectedValueOnce(new Error('Network error'))
-
-    const { messages, error, sendMessage } = useChat()
-    await sendMessage('test', 'agent-1')
-
-    expect(error.value).toBe('Network error')
     expect(messages.value).toHaveLength(2)
+    expect(messages.value[0].role).toBe('user')
     expect(messages.value[1].role).toBe('assistant')
+    expect(messages.value[1].content).toBe('Hello world')
   })
 
-  it('clearMessages resets state', async () => {
-    apiClient.post.mockResolvedValueOnce({
-      data: { answer: 'hi', sources: [] },
-    })
+  it('captures sources from SSE event', async () => {
+    global.fetch.mockResolvedValueOnce(
+      createMockResponse([
+        { type: 'token', content: 'Answer' },
+        { type: 'sources', sources: [{ content: 'src', page_number: 1, block_type: 'text' }] },
+        { type: 'done' },
+      ]),
+    )
 
-    const { messages, clearMessages, sendMessage } = useChat()
-    await sendMessage('hello', 'agent-1')
-    expect(messages.value).toHaveLength(2)
+    const { currentSources, sendMessage } = useChat()
+    await sendMessage('q', 'a')
 
+    expect(currentSources.value).toHaveLength(1)
+  })
+
+  it('handles fetch errors', async () => {
+    global.fetch.mockRejectedValueOnce(new Error('Network fail'))
+
+    const { error, messages, sendMessage } = useChat()
+    await sendMessage('q', 'a')
+
+    expect(error.value).toBe('Network fail')
+    expect(messages.value[1].content).toContain('error')
+  })
+
+  it('clears messages', () => {
+    const { messages, clearMessages } = useChat()
+    messages.value = [{ role: 'user', content: 'hi' }]
     clearMessages()
-    expect(messages.value).toEqual([])
+    expect(messages.value).toHaveLength(0)
   })
 })

@@ -2,11 +2,14 @@ import os
 import uuid
 import tempfile
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+import json
+import asyncio
 from src.auth.dependencies import get_current_user
 
 load_dotenv()
@@ -112,6 +115,43 @@ def chat(request: ChatRequest, user: dict = Depends(get_current_user)):
     ]
     
     return ChatResponse(answer=answer, sources=sources)
+
+
+@app.post("/chat/stream")
+async def chat_stream(request: ChatRequest, user: dict = Depends(get_current_user)):
+    """SSE streaming chat endpoint. Yields token-by-token responses."""
+    from src.agent.graph import app_graph
+
+    async def event_generator():
+        try:
+            result = app_graph.invoke({
+                "messages": [{"role": "user", "content": request.message}],
+                "user_id": user["user_id"],
+                "agent_id": request.agent_id,
+            })
+
+            last_msg = result["messages"][-1]
+            answer = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+
+            # Stream tokens (simulate chunked delivery)
+            words = answer.split(" ")
+            for i, word in enumerate(words):
+                token = word if i == 0 else " " + word
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                await asyncio.sleep(0.02)
+
+            # Send sources
+            raw_sources = result.get("sources", [])
+            sources = [
+                {"content": s.get("content", ""), "page_number": s.get("page_number", 0), "block_type": s.get("block_type", "")}
+                for s in raw_sources
+            ]
+            yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 # --- Admin: Knowledge Base Management ---
