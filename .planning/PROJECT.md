@@ -8,6 +8,8 @@ An admin-managed Agentic RAG chatbot platform aimed at providing high-precision 
 
 **Shipped: v1.2** (2026-03-22) — Production-polished platform with SSE streaming, multi-LLM, and RBAC.
 
+**Active: v1.3** — Admin Polish (API key management, KB analytics, system prompts)
+
 ### Key Accomplishments (v1.2)
 - SSE streaming chat with token-by-token progressive rendering
 - Multi-provider LLM adapters (OpenAI, Gemini, Anthropic) with dynamic model discovery
@@ -17,10 +19,8 @@ An admin-managed Agentic RAG chatbot platform aimed at providing high-precision 
 - 89 total tests (53 backend + 36 frontend), 2,980 LOC
 
 ### Next Milestone Goals (v1.3)
-- Ingestion SSE progress tracking
-- Provider API key management UI
-- Microsoft OAuth provider
-- KB usage analytics
+- Provider API key management UI with encrypted storage
+- KB usage analytics (query count, most-retrieved docs)
 - Custom system prompts per chatbot
 
 ## Core Value
