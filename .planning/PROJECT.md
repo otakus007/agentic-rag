@@ -6,22 +6,18 @@ An admin-managed Agentic RAG chatbot platform aimed at providing high-precision 
 
 ## Current State
 
-**Shipped: v1.2** (2026-03-22) — Production-polished platform with SSE streaming, multi-LLM, and RBAC.
+**Shipped: v1.3** (2026-03-23) — Admin Polish with API Key Management, Usage Analytics, and Custom Prompts.
 
-**Active: v1.3** — Admin Polish (API key management, KB analytics, system prompts)
+### Key Accomplishments (v1.3)
+- API Key Management with Fernet-encrypted database storage and masking
+- Knowledge Base Analytics tracking query logs, retrieved chunks, and history
+- Custom System Prompts configurable per chatbot and passed to multi-LLM adapters
+- 93 total tests (57 backend + 36 frontend), 3,923 LOC, ~44KB bundle
 
-### Key Accomplishments (v1.2)
-- SSE streaming chat with token-by-token progressive rendering
-- Multi-provider LLM adapters (OpenAI, Gemini, Anthropic) with dynamic model discovery
-- RBAC with users table, role management, and admin guard middleware
-- Document-level CRUD for KB chunks (list + delete)
-- Dark/light theme toggle, API versioning endpoint
-- 89 total tests (53 backend + 36 frontend), 2,980 LOC
-
-### Next Milestone Goals (v1.3)
-- Provider API key management UI with encrypted storage
-- KB usage analytics (query count, most-retrieved docs)
-- Custom system prompts per chatbot
+### Next Milestone Goals (v1.4)
+- Microsoft OAuth provider integration
+- Ingestion SSE progress tracking (upload → parsing → embedding status)
+- File management improvements
 
 ## Core Value
 

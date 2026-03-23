@@ -9,18 +9,10 @@
 ## v1.2 — Production Polish (Completed 2026-03-22)
 [Full details](milestones/v1.2-ROADMAP.md) | 5 phases | 89 tests | 2,980 LOC
 
+## v1.3 — Admin Polish (Completed 2026-03-23)
+[Full details](milestones/v1.3-ROADMAP.md) | 3 phases | 93 tests | 3,923 LOC
+
 ---
 
-## v1.3 — Admin Polish (Current)
-
-### Phase 16: Provider API Key Management
-**Goal:** Admin settings page for managing LLM provider API keys. Secure encrypted storage in PostgreSQL. Per-provider key status indicators. Frontend CRUD form.
-**Status:** Complete
-
-### Phase 17: KB Usage Analytics
-**Goal:** Track query count and most-retrieved chunks per KB. Query log table in PostgreSQL. Analytics dashboard widget on admin KB detail page.
-**Status:** Complete
-
-### Phase 18: Custom System Prompts
-**Goal:** Add system prompt field to chatbot config. Store in chatbots table. Pass to LLM adapter during invocation. Default template for new chatbots.
-**Status:** Complete
+## v1.4 — Next (Not yet planned)
+*Run `/gsd-new-milestone` to start.*
